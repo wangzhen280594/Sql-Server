@@ -1,3 +1,5 @@
+//用存储过程实现一些基本的功能：在找到数据的同时，也计算出对应的页码数。
+
 USE [TonbenApp]
 GO
 /****** Object:  StoredProcedure [dbo].[Tonben_PC_GetFeedbackList_sp]    Script Date: 2017/8/31 10:50:35 ******/
