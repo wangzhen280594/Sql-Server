@@ -1,0 +1,168 @@
+//解决在存储过程中一些字段值如果为空时，由于使用left join 可能会显示不出这条数据，使用动态存储过程的方法可以完美解决。
+
+USE [TonbenApp]
+GO
+/****** Object:  StoredProcedure [dbo].[Tonben_PC_GetReceiveOrigalDataList_sp]    Script Date: 2017/8/31 10:54:59 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- =============================================
+-- Author:		<DXL>
+-- Create date: <2017-08-25>
+-- Description:	<获取表具-基站-抄表信息>
+-- =============================================
+ALTER PROCEDURE [dbo].[Tonben_PC_GetReceiveOrigalDataList_sp](
+	 @UserCode						varchar(36)
+	,@UserCnName                    varchar(36)
+	,@StationNo                     varchar(36)
+	,@AuditYear                      varchar(36)
+	,@SearchFSKNo                    varchar(36)
+	,@AddressId                     varchar(36)
+	,@AreaId                       varchar(36)
+	,@LoginUserId					varchar(36)
+	,@PageIndex int  
+	,@PageSize int  
+	,@TotalCount int output 
+	) 
+AS
+BEGIN
+      DECLARE @query NVARCHAR(4000)  
+      DECLARE @sqlwhere NVARCHAR(max) 
+
+      DECLARE @queryCount NVARCHAR(4000)
+	  DECLARE @sqlCountwhere NVARCHAR(max) 
+        
+		SET @query=''
+		SET @sqlwhere=''
+	    
+		SET @queryCount=''
+		SET @sqlCountwhere=''
+
+
+
+		SET @query=
+		'  
+		SELECT * FROM  ( 
+		SELECT ROW_NUMBER() OVER(ORDER BY a.[CreateTime] DESC) AS "Num"  
+		      ,a.AuditId
+			  ,D.[MeterNo] as UserCode
+			  ,U.[UserCnName] as UserCnName
+			  ,a.AuditYear
+			  ,a.JanValue
+			  ,a.FebValue
+			  ,a.MarValue 
+			  ,a.AprValue
+			  ,a.MayValue
+			  ,a.JunValue
+			  ,a.JulValue
+			  ,a.AugValue
+			  ,a.SepValue
+			  ,a.OctValue
+			  ,a.NovValue
+			  ,a.DecValue
+			  ,a.CreateTime
+		 FROM [dbo].[Tonben_PC_UseGasAudit] a
+	         LEFT  JOIN Tonben_PC_UserDef  U ON U.UserID=a.UserId 
+			 LEFT  JOIN Tonben_PC_UserMeterRelation  M ON M.UserId=U.UserID  
+			 LEFT  JOIN Tonben_PC_MeterFskRelation  L ON L.MeterId=M.MeterId  
+			 LEFT  JOIN Tonben_PC_FskAddressDef  F ON F.FskAddrId=L.FskAddrId  
+			 LEFT  JOIN Tonben_PC_MeterDef  D ON D.MeterId=M.MeterId 
+			 LEFT  JOIN Tonben_PC_StationMeterRelation  S ON S.MeterId=D.MeterId
+			 LEFT  JOIN Tonben_PC_StationDef  T ON T.StationId=S.StationId
+			WHERE 1=1 '
+			 
+		  IF(@UserCode <>'' and @UserCode is not NULL)
+		  BEGIN
+		  SET @sqlwhere+=' AND D.MeterNo LIKE '+''''+ '%'+@UserCode+'%'+''''
+		  END
+
+		  IF(@UserCnName <>'' and @UserCnName is not NULL)
+		  BEGIN
+		  SET @sqlwhere+=' AND U.UserCnName LIKE '+''''+ '%'+@UserCnName+'%'+''''
+		  END
+
+		  IF(@AuditYear <>'' and @AuditYear is not NULL)
+		  BEGIN
+		  SET @sqlwhere+=' AND a.AuditYear LIKE '+''''+ '%'+@AuditYear+'%'+''''
+		  END
+
+		  IF(@StationNo <>'' and @StationNo is not NULL)
+		  BEGIN
+		  SET @sqlwhere+=' AND T.StationNo LIKE '+''''+ '%'+@StationNo+'%'+''''
+		  END
+		  
+
+		  IF(@SearchFSKNo <>'' and @SearchFSKNo is not NULL)
+		  BEGIN
+		  SET @sqlwhere+=' AND F.FSKNo LIKE '+''''+ '%'+@SearchFSKNo+'%'+''''
+		  END
+
+		  IF(@AreaId <>'' and @AreaId is not NULL)
+		  BEGIN
+		  SET @sqlwhere+=' AND U.Areaid='+''''+@AreaId+''''
+		  END
+
+		  SET @sqlwhere+='AND a.IsUse=1'
+											  
+ SET @sqlwhere=@sqlwhere+') aa where 1=1 '
+ SET @sqlwhere=@sqlwhere+'
+   AND aa.Num >'+CAST(((@PageIndex-1)*@PageSize) AS nvarchar(20))+' and aa.Num<='+CAST((@PageIndex*@PageSize) AS nvarchar(20))
+   +'ORDER BY aa.CreateTime DESC '
+    SET @query=@query+@sqlwhere
+    SET @query=SUBSTRING(@query,4,LEN(@query)-3)
+
+    EXEC(@query) 
+
+  SET @queryCount= '
+    SELECT @TotalCount=COUNT(*) FROM [dbo].[Tonben_PC_UseGasAudit] a
+		     LEFT  JOIN Tonben_PC_UserDef  U ON U.UserID=a.UserId 
+			 LEFT  JOIN Tonben_PC_UserMeterRelation  M ON M.UserId=U.UserID  
+			 LEFT  JOIN Tonben_PC_MeterFskRelation  L ON L.MeterId=M.MeterId  
+			 LEFT  JOIN Tonben_PC_FskAddressDef  F ON F.FskAddrId=L.FskAddrId  
+			 LEFT  JOIN Tonben_PC_MeterDef  D ON D.MeterId=M.MeterId 
+			 LEFT  JOIN Tonben_PC_StationMeterRelation  S ON S.MeterId=D.MeterId
+			 LEFT  JOIN Tonben_PC_StationDef  T ON T.StationId=S.StationId
+			WHERE 1=1 '
+	     
+		IF(@UserCode <>'' and @UserCode is not NULL)
+		  BEGIN
+		  SET @sqlCountwhere+=' AND D.MeterNo LIKE '+''''+ '%'+@UserCode+'%'+''''
+		  END
+
+		  IF(@UserCnName <>'' and @UserCnName is not NULL)
+		  BEGIN
+		  SET @sqlCountwhere+=' AND U.UserCnName LIKE '+''''+ '%'+@UserCnName+'%'+''''
+		  END
+
+		  IF(@AuditYear <>'' and @AuditYear is not NULL)
+		  BEGIN
+		  SET @sqlCountwhere+=' AND a.AuditYear LIKE '+''''+ '%'+@AuditYear+'%'+''''
+		  END
+
+		  IF(@StationNo <>'' and @StationNo is not NULL)
+		  BEGIN
+		  SET @sqlCountwhere+=' AND T.StationNo LIKE '+''''+ '%'+@StationNo+'%'+''''
+		  END
+		  
+
+		  IF(@SearchFSKNo <>'' and @SearchFSKNo is not NULL)
+		  BEGIN
+		  SET @sqlCountwhere+=' AND F.FSKNo LIKE '+''''+ '%'+@SearchFSKNo+'%'+''''
+		  END
+		  
+
+		  IF(@AreaId <>'' and @AreaId is not NULL)
+		  BEGIN
+		  SET @sqlCountwhere+=' AND U.Areaid='+''''+@AreaId+''''
+		  END
+
+		  SET @sqlwhere+='AND a.IsUse=1'
+
+         SET @queryCount+=@sqlCountwhere
+    
+          PRINT(@queryCount)
+	      EXECUTE sp_executesql @queryCount,N'@TotalCount INT OUTPUT',@TotalCount OUTPUT;
+
+
+END
