@@ -1,0 +1,137 @@
+USE [TonbenApp]
+GO
+/****** Object:  StoredProcedure [dbo].[Tonben_PC_OrgalDataConfim_sp]    Script Date: 2017/8/31 10:54:02 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- =============================================
+-- Author:		Wangzhen
+-- Create date: 2017-08-22
+-- Description:	确认抄表原始数据
+-- =============================================
+ALTER PROCEDURE [dbo].[Tonben_PC_OrgalDataConfim_sp] 
+(
+	 @ReceiveId						varchar(36)
+	
+)
+
+   
+AS
+     DECLARE @MerterId VARCHAR(36)
+	 DECLARE @UserId VARCHAR(36)
+	 DECLARE @UserCnName VARCHAR(36)
+	 DECLARE @CreateUser VARCHAR(36)
+	 DECLARE @CreateTime datetime
+	 DECLARE @Reading VARCHAR(36)
+BEGIN
+	SELECT     @MerterId=U.UserCode
+	          ,@UserId=U.UserID
+			  ,@UserCnName=U.UserCnName
+			  ,@CreateUser=a.CreateUser
+			  ,@CreateTime=a.CreateTime
+			  ,@Reading=a.Reading
+		  FROM [dbo].[Tonben_PC_ReceiveQueue] a
+		    LEFT JOIN Tonben_PC_MeterDef y on REPLACE(a.MeterId,' ','')=substring(y.MeterNo,len(y.MeterNo)-7,8)
+	        LEFT JOIN Tonben_PC_UserMeterRelation M ON y.MeterId=m.MeterId 
+	        INNER JOIN Tonben_PC_UserDef  U ON M.UserId=U.UserID  
+		   WHERE a.ReceiveId= @ReceiveId
+ 
+ IF NOT EXISTS(
+		SELECT * FROM Tonben_PC_UseGasAudit A WHERE A.UserId=@UserId AND IsUse=1
+	)
+	BEGIN
+	INSERT INTO Tonben_PC_UseGasAudit(
+	AuditId,
+	UserId,
+	AuditYear,
+	JanValue,
+	FebValue,
+	MarValue,
+	AprValue,
+	MayValue,
+	JunValue,
+	JulValue,
+	AugValue,
+	SepValue,
+	OctValue,
+	NovValue,
+	DecValue,
+	CreateUser,
+	CreateTime,
+	ModifyUser,
+	ModifyTime,
+	IsUse
+	) 
+	VALUES(
+		newid(),
+		@UserId,
+		Year(@CreateTime),
+		case when Month(@CreateTime)=1 then CAST (@Reading as DECIMAL(18,2)) else 0 end, 
+		case when Month(@CreateTime)=2 then CAST (@Reading as DECIMAL(18,2)) else 0 end,
+		case when Month(@CreateTime)=3 then CAST (@Reading as DECIMAL(18,2)) else 0 end,
+		case when Month(@CreateTime)=4 then CAST (@Reading as DECIMAL(18,2)) else 0 end,
+		case when Month(@CreateTime)=5 then CAST (@Reading as DECIMAL(18,2)) else 0 end,
+		case when Month(@CreateTime)=6 then CAST (@Reading as DECIMAL(18,2)) else 0 end,
+		case when Month(@CreateTime)=7 then CAST (@Reading as DECIMAL(18,2)) else 0 end,
+		case when Month(@CreateTime)=8 then CAST (@Reading as DECIMAL(18,2)) else 0 end,
+		case when Month(@CreateTime)=9 then CAST (@Reading as DECIMAL(18,2)) else 0 end,
+		case when Month(@CreateTime)=10 then CAST (@Reading as DECIMAL(18,2)) else 0 end,
+		case when Month(@CreateTime)=11 then CAST (@Reading as DECIMAL(18,2)) else 0 end,
+		case when Month(@CreateTime)=12 then CAST (@Reading as DECIMAL(18,2)) else 0 end,
+		@CreateUser,
+		GETDATE(),
+		@CreateUser,
+		GETDATE(),
+		1
+	)
+	END
+	ELSE
+	BEGIN
+		UPDATE Tonben_PC_UseGasAudit SET UserId=@UserId, 
+		JanValue=case when Month(@CreateTime)=1 then CAST (@Reading as DECIMAL(18,2)) else JanValue end,
+		FebValue=case when Month(@CreateTime)=2 then CAST (@Reading as DECIMAL(18,2)) else FebValue end, 
+		MarValue=case when Month(@CreateTime)=3 then CAST (@Reading as DECIMAL(18,2)) else MarValue end, 
+		AprValue=case when Month(@CreateTime)=4 then CAST (@Reading as DECIMAL(18,2)) else AprValue end, 
+		MayValue=case when Month(@CreateTime)=5 then CAST (@Reading as DECIMAL(18,2)) else MayValue end, 
+		JunValue=case when Month(@CreateTime)=6 then CAST (@Reading as DECIMAL(18,2)) else JunValue end, 
+		JulValue=case when Month(@CreateTime)=7 then CAST (@Reading as DECIMAL(18,2)) else JulValue end, 
+		AugValue=case when Month(@CreateTime)=8 then CAST (@Reading as DECIMAL(18,2)) else AugValue end, 
+		SepValue=case when Month(@CreateTime)=9 then CAST (@Reading as DECIMAL(18,2)) else SepValue end, 
+		OctValue=case when Month(@CreateTime)=10 then CAST (@Reading as DECIMAL(18,2)) else OctValue end, 
+		NovValue=case when Month(@CreateTime)=11 then CAST (@Reading as DECIMAL(18,2)) else NovValue end, 
+		DecValue=case when Month(@CreateTime)=12 then CAST (@Reading as DECIMAL(18,2)) else DecValue end,  
+			ModifyUser=@CreateUser,
+			ModifyTime=GETDATE()
+		WHERE UserId=@UserId AND IsUse=1 	
+	END
+
+
+
+
+
+     UPDATE  [dbo].[Tonben_PC_MeterDef] 
+	     SET CurrentData = @Reading
+		     WHERE MeterNo= @MerterId
+
+
+     INSERT INTO [dbo].[Tonben_PC_OrgalConfimLog](
+	              LogId
+				 ,ReceiveId
+				 ,Write
+				 ,UserId
+				 ,CreateUser
+				 ,Createtime
+	 )
+	 VALUES(
+	       NEWID()
+		  ,@ReceiveId
+		  ,'操作员'+@CreateUser+'更新了用户'+@UserCnName+'的原始数据'
+		  ,@UserId
+		  ,@CreateUser
+		  ,GETDATE()
+	 )
+
+	 SELECT 'SUCCESS'
+
+END
