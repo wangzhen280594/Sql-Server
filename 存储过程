@@ -1,0 +1,61 @@
+USE [TonbenApp]
+GO
+/****** Object:  StoredProcedure [dbo].[Tonben_PC_GetFeedbackList_sp]    Script Date: 2017/8/31 10:50:35 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- =============================================
+-- Author:		Ericzhang
+-- Create date: 2017-07-29
+-- Description:	问题反馈综合查询分页列表
+-- =============================================
+ALTER PROCEDURE [dbo].[Tonben_PC_GetFeedbackList_sp] 
+(
+	 @TypeId							varchar(36)
+	,@Title								nvarchar(200)
+	,@LoginUserId						varchar(36)
+	,@PageIndex int  
+	,@PageSize int  
+	,@TotalCount int output 
+)
+AS
+BEGIN
+	DECLARE @IsAdmin INT
+	SET @IsAdmin=0
+
+	--判断当前登录用户是否是超级管理员
+	IF EXISTS(SELECT * FROM Tonben_PC_UserDef A WHERE A.UserID=@LoginUserId AND A.UserType=0 AND A.IsUsed=1)
+	BEGIN
+		SET @IsAdmin=1
+	END
+
+	SELECT * FROM  ( 
+		SELECT ROW_NUMBER() OVER(ORDER BY a.[CreateTime] DESC) AS 'Num'  
+			  ,a.[FeedbackId]
+			  ,a.[TypeId]
+			  ,b.[ParameterDesc] as TypeName
+			  ,a.[Title]
+			  ,a.[ContentDesc]
+			  ,c.UserAccount 
+			  ,a.[CreateTime] as FeedBackTime
+			  ,(SELECT TOP 1 X.ReplyId FROM Tonben_PC_FeedbackReplyDef X WHERE X.FeedbackId=a.FeedbackID) AS ReplyId 
+		  FROM [dbo].[Tonben_PC_Feedback] a 
+			INNER JOIN [dbo].[Tonben_PC_ParameterDef] b ON a.TypeId=b.ParameterID
+			INNER JOIN Tonben_PC_UserDef c on a.CreateUser=c.UserID
+		  WHERE (a.Title like case when @Title is null or @Title='' then a.Title else '%'+@Title+'%' end)
+			and (a.TypeId = case when @TypeId is not null and @TypeId<>'' then @TypeId else a.TypeId end)	
+			and (a.CreateUser = case when @IsAdmin=0 then @LoginUserId else a.CreateUser end)	  
+			and a.IsUsed=1 
+  )  aa  
+  WHERE aa.Num>(@PageIndex-1)*@PageSize and aa.Num<=(@PageIndex)*@PageSize  
+  ORDER BY aa.FeedBackTime DESC
+    
+  SELECT @TotalCount=COUNT(*) FROM [dbo].[Tonben_PC_Feedback] a
+		INNER JOIN [dbo].[Tonben_PC_ParameterDef] b ON a.TypeId=b.ParameterID
+		INNER JOIN Tonben_PC_UserDef c on a.CreateUser=c.UserID
+	WHERE (a.Title like case when @Title is null or @Title='' then a.Title else '%'+@Title+'%' end)
+			and (a.TypeId = case when @TypeId is not null and @TypeId<>'' then @TypeId else a.TypeId end)	
+			and (a.CreateUser = case when @IsAdmin=0 then @LoginUserId else a.CreateUser end) 
+			and a.IsUsed=1 
+END
